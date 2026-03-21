@@ -4,7 +4,7 @@ import { Card, CardContent } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Badge } from "../components/ui/badge";
-import { Play, Volume2, Settings, Edit2, Check } from "lucide-react";
+import { Play, Volume2, Settings, Edit2, Check, Pause, RotateCcw, Loader2, Lock } from "lucide-react";
 import { ImageWithFallback } from "../components/figma/ImageWithFallback";
 import {
   Select,
@@ -83,7 +83,7 @@ const MOCK_SCRIPT_LINES: ScriptLine[] = [
   },
   {
     id: "5",
-    text: "설정, 배��리로 가서 최적화 충전을 켜세요.",
+    text: "설정, 배터리로 가서 최적화 충전을 켜세요.",
     direction: "설명 톤",
   },
   {
@@ -130,6 +130,11 @@ export default function Persona() {
   const [hasGeneratedTTS, setHasGeneratedTTS] = useState(false);
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [editingDirectionId, setEditingDirectionId] = useState<string | null>(null);
+  const [playingLineId, setPlayingLineId] = useState<string | null>(null);
+  const [isFullPlaying, setIsFullPlaying] = useState(false);
+  const [regeneratingLineId, setRegeneratingLineId] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [totalDuration] = useState(45); // Mock duration in seconds
 
   const handleGenerateTTS = () => {
     setHasGeneratedTTS(true);
@@ -148,8 +153,58 @@ export default function Persona() {
     setEditingDirectionId(null);
   };
 
+  const handlePlayLine = (id: string) => {
+    setPlayingLineId(id);
+    setIsFullPlaying(false);
+    // Mock: auto stop after 2 seconds
+    setTimeout(() => setPlayingLineId(null), 2000);
+  };
+
+  const handlePauseLine = () => {
+    setPlayingLineId(null);
+  };
+
+  const handleRegenerateLine = (id: string) => {
+    setRegeneratingLineId(id);
+    // Mock regeneration
+    setTimeout(() => {
+      setRegeneratingLineId(null);
+      // Optional: pulse animation feedback
+    }, 1500);
+  };
+
+  const handleFullPlay = () => {
+    setIsFullPlaying(true);
+    setPlayingLineId(scriptLines[0].id);
+    
+    // Mock progressive playback
+    let index = 0;
+    const interval = setInterval(() => {
+      index++;
+      if (index < scriptLines.length) {
+        setPlayingLineId(scriptLines[index].id);
+        setCurrentTime((index / scriptLines.length) * totalDuration);
+      } else {
+        setIsFullPlaying(false);
+        setPlayingLineId(null);
+        clearInterval(interval);
+      }
+    }, 3000);
+  };
+
+  const handleFullPause = () => {
+    setIsFullPlaying(false);
+    setPlayingLineId(null);
+  };
+
   const handleNext = () => {
     navigate("../storyboard");
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -203,10 +258,13 @@ export default function Persona() {
 
         <Card className="flex-1 mb-4 overflow-hidden flex flex-col border-none shadow-md">
           <CardContent className="p-6 flex-1 flex flex-col overflow-hidden">
-            <div className="flex-1 overflow-auto mb-4 space-y-3">
+            <div className="flex-1 overflow-auto mb-4 space-y-4">
               {scriptLines.map((line, index) => {
                 const showDirection =
                   index === 0 || line.direction !== scriptLines[index - 1].direction;
+                const isPlaying = playingLineId === line.id;
+                const isRegenerating = regeneratingLineId === line.id;
+                const isLocked = isFullPlaying && !isPlaying;
 
                 return (
                   <div key={line.id} className="space-y-2">
@@ -242,37 +300,109 @@ export default function Persona() {
                           <Badge
                             variant="secondary"
                             className="text-xs cursor-pointer hover:bg-indigo-100 hover:text-indigo-700"
-                            onClick={() => setEditingDirectionId(line.id)}
+                            onClick={() => !isLocked && setEditingDirectionId(line.id)}
                           >
                             {line.direction}
-                            <Edit2 className="w-3 h-3 ml-1" />
+                            {!isLocked && <Edit2 className="w-3 h-3 ml-1" />}
+                            {isLocked && <Lock className="w-3 h-3 ml-1" />}
                           </Badge>
                         )}
                       </div>
                     )}
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      {editingLineId === line.id ? (
-                        <Input
-                          value={line.text}
-                          onChange={(e) => handleLineEdit(line.id, e.target.value)}
-                          onBlur={() => setEditingLineId(null)}
-                          autoFocus
-                          className="text-sm"
-                        />
-                      ) : (
-                        <p
-                          className="text-sm text-gray-800 cursor-pointer hover:bg-gray-100 rounded p-1"
-                          onClick={() => setEditingLineId(line.id)}
-                        >
-                          {line.text}
-                        </p>
-                      )}
+                    
+                    {/* Sentence Block with Controls */}
+                    <div
+                      className={`group relative rounded-lg p-4 transition-all duration-300 ${
+                        isPlaying
+                          ? "bg-violet-50 border-l-4 border-indigo-600 shadow-lg scale-[1.01]"
+                          : isRegenerating
+                          ? "bg-gray-100 opacity-60"
+                          : "bg-gray-50 hover:bg-white hover:shadow-md"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        {/* Text Area */}
+                        <div className="flex-1 min-w-0">
+                          {editingLineId === line.id ? (
+                            <Input
+                              value={line.text}
+                              onChange={(e) => handleLineEdit(line.id, e.target.value)}
+                              onBlur={() => setEditingLineId(null)}
+                              autoFocus
+                              disabled={isLocked}
+                              className="text-sm"
+                            />
+                          ) : (
+                            <p
+                              className={`text-sm text-gray-800 cursor-pointer rounded p-1 transition-colors ${
+                                !isLocked && "hover:bg-gray-100"
+                              }`}
+                              onClick={() => !isLocked && setEditingLineId(line.id)}
+                            >
+                              {line.text}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Audio Controls (show on hover or when active) */}
+                        {hasGeneratedTTS && (
+                          <div
+                            className={`flex items-center gap-2 transition-opacity ${
+                              isPlaying || isRegenerating
+                                ? "opacity-100"
+                                : "opacity-0 group-hover:opacity-100"
+                            }`}
+                          >
+                            {/* Play/Pause Button */}
+                            {isRegenerating ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                disabled
+                              >
+                                <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+                              </Button>
+                            ) : isPlaying ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 hover:bg-indigo-100"
+                                onClick={handlePauseLine}
+                              >
+                                <Pause className="w-4 h-4 text-indigo-600" />
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 hover:bg-indigo-100"
+                                onClick={() => handlePlayLine(line.id)}
+                              >
+                                <Play className="w-4 h-4 text-indigo-600" />
+                              </Button>
+                            )}
+
+                            {/* Regenerate Button */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 hover:bg-violet-100"
+                              onClick={() => handleRegenerateLine(line.id)}
+                              disabled={isRegenerating}
+                            >
+                              <RotateCcw className="w-4 h-4 text-violet-600" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
               })}
             </div>
 
+            {/* Bottom TTS Timeline */}
             <div className="border-t pt-4 space-y-3">
               {!hasGeneratedTTS ? (
                 <Button onClick={handleGenerateTTS} className="w-full bg-indigo-600 hover:bg-indigo-700" size="lg">
@@ -280,18 +410,71 @@ export default function Persona() {
                 </Button>
               ) : (
                 <>
-                  <div className="bg-gray-100 rounded-lg p-4 flex items-center gap-3">
-                    <Button variant="outline" size="sm">
-                      <Play className="w-4 h-4" />
-                    </Button>
-                    <div className="flex-1 h-2 bg-gray-300 rounded-full overflow-hidden">
-                      <div className="h-full w-1/3 bg-indigo-600"></div>
+                  {/* Enhanced Audio Timeline */}
+                  <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl p-4 border border-gray-200">
+                    <div className="flex items-center gap-4 mb-3">
+                      {/* Play/Pause */}
+                      {isFullPlaying ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleFullPause}
+                          className="h-10 w-10 rounded-full p-0 border-2 border-indigo-600 hover:bg-indigo-50"
+                        >
+                          <Pause className="w-5 h-5 text-indigo-600" />
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleFullPlay}
+                          className="h-10 w-10 rounded-full p-0 border-2 border-indigo-600 hover:bg-indigo-50"
+                        >
+                          <Play className="w-5 h-5 text-indigo-600" />
+                        </Button>
+                      )}
+
+                      {/* Progress Bar with Waveform Style */}
+                      <div className="flex-1">
+                        <div className="relative h-10 bg-gray-200 rounded-full overflow-hidden">
+                          {/* Progress */}
+                          <div
+                            className="absolute inset-y-0 left-0 bg-gradient-to-r from-indigo-600 to-violet-600 transition-all duration-300"
+                            style={{ width: `${(currentTime / totalDuration) * 100}%` }}
+                          ></div>
+                          
+                          {/* Sentence Markers */}
+                          {scriptLines.map((_, i) => (
+                            <div
+                              key={i}
+                              className="absolute top-0 bottom-0 w-px bg-white/40"
+                              style={{ left: `${((i + 1) / scriptLines.length) * 100}%` }}
+                            ></div>
+                          ))}
+                        </div>
+
+                        {/* Time Display */}
+                        <div className="flex items-center justify-between mt-2 px-2">
+                          <span className="text-xs font-medium text-gray-600">
+                            {formatTime(currentTime)}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {formatTime(totalDuration)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Volume */}
+                      <Button variant="ghost" size="sm" className="h-10 w-10 p-0">
+                        <Volume2 className="w-5 h-5 text-gray-600" />
+                      </Button>
                     </div>
-                    <Volume2 className="w-4 h-4 text-gray-600" />
                   </div>
+
+                  {/* Action Buttons */}
                   <div className="flex gap-2">
                     <Button variant="outline" className="flex-1">
-                      TTS 다시 생성
+                      전체 TTS 다시 생성
                     </Button>
                     <Button onClick={handleNext} className="flex-1 bg-indigo-600 hover:bg-indigo-700">
                       스토리보드로 이동
